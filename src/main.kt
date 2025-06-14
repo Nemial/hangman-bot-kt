@@ -1,11 +1,16 @@
 import dev.inmo.kslog.common.KSLog
 import dev.inmo.kslog.common.LogLevel
 import dev.inmo.kslog.common.defaultMessageFormatter
+import dev.inmo.tgbotapi.extensions.api.send.send
 import dev.inmo.tgbotapi.extensions.api.telegramBot
 import dev.inmo.tgbotapi.extensions.behaviour_builder.buildBehaviourWithLongPolling
+import dev.inmo.tgbotapi.extensions.behaviour_builder.triggers_handling.onCommand
 import dev.inmo.tgbotapi.extensions.behaviour_builder.triggers_handling.onText
-import dev.inmo.tgbotapi.extensions.utils.extensions.raw.from
-import dev.inmo.tgbotapi.utils.RiskFeature
+import dev.inmo.tgbotapi.types.IdChatIdentifier
+import dev.inmo.tgbotapi.types.message.MarkdownV2ParseMode
+import dev.inmo.tgbotapi.utils.PreviewFeature
+import game.HangmanGame
+import game.WordRepository
 import org.apache.commons.configuration2.PropertiesConfiguration
 import org.apache.commons.configuration2.builder.fluent.Configurations
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -16,30 +21,52 @@ import kotlin.system.exitProcess
 suspend fun main() {
     val config = loadConfig()
 
-    loadDb(config)
+//    loadDb(config)
+    configureLogger()
     startBot(config)
 }
 
-@OptIn(RiskFeature::class)
+
+@OptIn(PreviewFeature::class)
 suspend fun startBot(config: PropertiesConfiguration) {
     if (!config.containsKey("TOKEN")) {
         println("Не передан TOKEN для бота!")
         exitProcess(1)
     }
-    KSLog.default =
-        KSLog { level: LogLevel, tag: String?, message: Any, throwable: Throwable? ->
-            if (throwable is CancellationException) return@KSLog
-            if (level == LogLevel.ERROR || level == LogLevel.WARNING || level == LogLevel.INFO) {
-                println(defaultMessageFormatter(level, tag, message, throwable))
-            }
-        }
 
     val bot = telegramBot(config.getString("TOKEN"))
-
+    val sessions = mutableMapOf<IdChatIdentifier, HangmanGame>()
 
     bot.buildBehaviourWithLongPolling {
-        onText {
-            println(it.from)
+        onCommand("start") {
+            val chatId = it.chat.id
+            sessions[chatId] = HangmanGame(WordRepository.getRandomWord())
+            send(chatId, "Игра началась! Угадайте слово")
+        }
+
+        onText(initialFilter = {
+            !it.content.text.startsWith("/")
+        }) {
+            val chatId = it.chat.id
+
+            if (chatId !in sessions) {
+                send(chatId, "Запустите игру, чтобы начать!")
+            }
+
+            val game = sessions[chatId]!!
+
+            if (game.isOver) {
+                send(chatId, "Запустите игру, чтобы начать!")
+            }
+
+            val text = it.content.text
+
+            if (text.length > 1) {
+                send(chatId, "Введите одну букву!")
+            }
+
+            val result = game.guess(it.content.text[0].lowercaseChar())
+            send(chatId, result, parseMode = MarkdownV2ParseMode)
         }
     }.join()
 }
@@ -57,4 +84,14 @@ fun loadDb(config: PropertiesConfiguration) {
         user = config.getString("DB_USERNAME"),
         password = config.getString("DB_PASSWORD"),
     )
+}
+
+fun configureLogger() {
+    KSLog.default =
+        KSLog { level: LogLevel, tag: String?, message: Any, throwable: Throwable? ->
+            if (throwable is CancellationException) return@KSLog
+            if (level == LogLevel.ERROR || level == LogLevel.WARNING || level == LogLevel.INFO) {
+                println(defaultMessageFormatter(level, tag, message, throwable))
+            }
+        }
 }

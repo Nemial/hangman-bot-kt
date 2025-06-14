@@ -13,3 +13,7 @@ dependencies:
   - org.jetbrains.exposed:exposed-kotlin-datetime:1.0.0-beta-2
   - org.jetbrains.exposed:exposed-migration:1.0.0-beta-2
   - com.mysql:mysql-connector-j:9.3.0
+
+settings:
+  jvm:
+    release: 21
