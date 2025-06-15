@@ -1,18 +1,22 @@
 product: jvm/app
 
 dependencies:
+  #TG Bot
   - dev.inmo:tgbotapi:25.0.1
   # Environment
   - ch.qos.logback:logback-classic:1.5.18
   - org.apache.commons:commons-configuration2:2.12.0
   - commons-beanutils:commons-beanutils:1.10.1
   # Exposed
-  - org.jetbrains.exposed:exposed-core:1.0.0-beta-2
-  - org.jetbrains.exposed:exposed-jdbc:1.0.0-beta-2
-  - org.jetbrains.exposed:exposed-dao:1.0.0-beta-2
-  - org.jetbrains.exposed:exposed-kotlin-datetime:1.0.0-beta-2
-  - org.jetbrains.exposed:exposed-migration:1.0.0-beta-2
+  - bom: org.jetbrains.exposed:exposed-bom:1.0.0-beta-2
+  - org.jetbrains.exposed:exposed-core
+  - org.jetbrains.exposed:exposed-jdbc
+  - org.jetbrains.exposed:exposed-dao
+  - org.jetbrains.exposed:exposed-kotlin-datetime
+  - org.jetbrains.exposed:exposed-migration
+  # DB
   - com.mysql:mysql-connector-j:9.3.0
+  - com.zaxxer:HikariCP:6.3.0
 
 settings:
   jvm:

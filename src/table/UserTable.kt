@@ -6,7 +6,7 @@ import org.jetbrains.exposed.v1.datetime.datetime
 
 const val MAX_LENGTH_VARCHAR = 255
 
-object UserTable : IntIdTable() {
+object UserTable : IntIdTable("user") {
     val firstName = varchar("first_name", MAX_LENGTH_VARCHAR).nullable()
     val lastName = varchar("last_name", MAX_LENGTH_VARCHAR).nullable()
     val userName = varchar("username", MAX_LENGTH_VARCHAR)

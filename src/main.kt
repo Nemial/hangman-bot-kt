@@ -1,3 +1,5 @@
+import com.zaxxer.hikari.HikariConfig
+import com.zaxxer.hikari.HikariDataSource
 import dev.inmo.kslog.common.KSLog
 import dev.inmo.kslog.common.LogLevel
 import dev.inmo.kslog.common.defaultMessageFormatter
@@ -11,9 +13,16 @@ import dev.inmo.tgbotapi.types.message.MarkdownV2ParseMode
 import dev.inmo.tgbotapi.utils.PreviewFeature
 import game.HangmanGame
 import game.WordRepository
+import kotlinx.datetime.Clock
 import org.apache.commons.configuration2.PropertiesConfiguration
 import org.apache.commons.configuration2.builder.fluent.Configurations
+import org.jetbrains.exposed.v1.core.ExperimentalDatabaseMigrationApi
 import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.migration.MigrationUtils
+import table.UserStatTable
+import table.UserTable
+import table.WordTable
 import java.io.File
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.system.exitProcess
@@ -21,9 +30,26 @@ import kotlin.system.exitProcess
 suspend fun main() {
     val config = loadConfig()
 
-//    loadDb(config)
+    loadDb(config)
+    if (config.getString("APP_ENV") === "dev") {
+        genMigrations()
+    }
+
     configureLogger()
     startBot(config)
+}
+
+@OptIn(ExperimentalDatabaseMigrationApi::class)
+fun genMigrations() {
+    val timestamp = Clock.System.now().toEpochMilliseconds()
+
+    transaction {
+        MigrationUtils.generateMigrationScript(
+            tables = arrayOf(UserTable, UserStatTable, WordTable),
+            scriptDirectory = "migrations",
+            scriptName = "Version$timestamp"
+        )
+    }
 }
 
 
@@ -36,7 +62,6 @@ suspend fun startBot(config: PropertiesConfiguration) {
 
     val bot = telegramBot(config.getString("TOKEN"))
     val sessions = mutableMapOf<IdChatIdentifier, HangmanGame>()
-
     bot.buildBehaviourWithLongPolling {
         onCommand("start") {
             val chatId = it.chat.id
@@ -78,12 +103,18 @@ fun loadConfig(): PropertiesConfiguration {
 }
 
 fun loadDb(config: PropertiesConfiguration) {
-    Database.connect(
-        url = config.getString("DB_URL"),
-        driver = "com.mysql.cj.jdbc.Driver",
-        user = config.getString("DB_USERNAME"),
-        password = config.getString("DB_PASSWORD"),
-    )
+    val dbConfig = HikariConfig().apply {
+        jdbcUrl = config.getString("DB_URL")
+        driverClassName = "com.mysql.cj.jdbc.Driver"
+        username = config.getString("DB_USERNAME")
+        password = config.getString("DB_PASSWORD")
+        maximumPoolSize = 3
+        isReadOnly = false
+        transactionIsolation = "TRANSACTION_SERIALIZABLE"
+    }
+
+    val dataSource = HikariDataSource(dbConfig)
+    Database.connect(dataSource)
 }
 
 fun configureLogger() {
