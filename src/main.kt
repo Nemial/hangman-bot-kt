@@ -2,15 +2,17 @@ import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
 import dev.inmo.kslog.common.KSLog
 import dev.inmo.kslog.common.LogLevel
-import dev.inmo.kslog.common.defaultMessageFormatter
+import dev.inmo.kslog.common.error
 import dev.inmo.tgbotapi.extensions.api.send.send
 import dev.inmo.tgbotapi.extensions.api.telegramBot
 import dev.inmo.tgbotapi.extensions.behaviour_builder.buildBehaviourWithLongPolling
 import dev.inmo.tgbotapi.extensions.behaviour_builder.triggers_handling.onCommand
 import dev.inmo.tgbotapi.extensions.behaviour_builder.triggers_handling.onText
+import dev.inmo.tgbotapi.extensions.utils.fromUserOrThrow
 import dev.inmo.tgbotapi.types.IdChatIdentifier
 import dev.inmo.tgbotapi.types.message.MarkdownV2ParseMode
 import dev.inmo.tgbotapi.utils.PreviewFeature
+import entity.UserEntity
 import game.HangmanGame
 import game.WordRepository
 import kotlinx.datetime.Clock
@@ -20,6 +22,7 @@ import org.jetbrains.exposed.v1.core.ExperimentalDatabaseMigrationApi
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.migration.MigrationUtils
+import org.slf4j.LoggerFactory
 import table.UserStatTable
 import table.UserTable
 import table.WordTable
@@ -62,9 +65,33 @@ suspend fun startBot(config: PropertiesConfiguration) {
 
     val bot = telegramBot(config.getString("TOKEN"))
     val sessions = mutableMapOf<IdChatIdentifier, HangmanGame>()
+    val logger = KSLog.default
     bot.buildBehaviourWithLongPolling {
         onCommand("start") {
             val chatId = it.chat.id
+            val rawChatId = chatId.chatId.long.toInt()
+            val user = it.fromUserOrThrow().user
+            val userEntity = transaction {
+                UserEntity.find { UserTable.id eq rawChatId }.firstOrNull()
+            }
+
+            if (userEntity == null) {
+                try {
+                    transaction {
+                        UserEntity.new {
+                            firstName = user.firstName
+                            lastName = user.lastName
+                            userName = user.username?.username ?: ""
+                            referenceId = rawChatId
+                        }
+                    }
+                } catch (e: Exception) {
+                    logger.error(
+                        "Ошибка создания пользователя UserName: ${user.username?.username}|ChatId: $rawChatId",
+                        e
+                    )
+                }
+            }
             sessions[chatId] = HangmanGame(WordRepository.getRandomWord())
             send(chatId, "Игра началась! Угадайте слово")
         }
@@ -121,8 +148,14 @@ fun configureLogger() {
     KSLog.default =
         KSLog { level: LogLevel, tag: String?, message: Any, throwable: Throwable? ->
             if (throwable is CancellationException) return@KSLog
-            if (level == LogLevel.ERROR || level == LogLevel.WARNING || level == LogLevel.INFO) {
-                println(defaultMessageFormatter(level, tag, message, throwable))
+
+            val logger = LoggerFactory.getLogger(tag ?: "KSLog")
+            when (level) {
+                LogLevel.ERROR -> logger.error(message.toString(), throwable)
+                LogLevel.INFO -> logger.info(message.toString(), throwable)
+                LogLevel.DEBUG -> logger.debug(message.toString(), throwable)
+                LogLevel.TRACE -> logger.trace(message.toString(), throwable)
+                else -> null
             }
         }
 }
