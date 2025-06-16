@@ -1,6 +1,6 @@
 package game
 
-import util.escapeMarkdown
+import bot.escapeMarkdown
 
 
 class HangmanGame(private val word: String) {

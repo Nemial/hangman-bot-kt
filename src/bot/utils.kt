@@ -1,4 +1,4 @@
-package util
+package bot
 
 fun escapeMarkdown(text: String): String {
     if (text.isEmpty()) {

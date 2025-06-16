@@ -2,7 +2,7 @@ product: jvm/app
 
 dependencies:
   #TG Bot
-  - dev.inmo:tgbotapi:25.0.1
+  - dev.inmo:tgbotapi:26.0.0
   # Environment
   - ch.qos.logback:logback-classic:1.5.18
   - org.apache.commons:commons-configuration2:2.12.0
